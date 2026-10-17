@@ -12,6 +12,5 @@
 - **Run the benchmarks yourself:** [bench](https://github.com/wunderlab-ai/bench)
 - **Write or improve agent roles:** [roles](https://github.com/wunderlab-ai/roles)
 - **Add a GPU backend:** [engine-api](https://github.com/wunderlab-ai/engine-api)
-- **Support the project:** [Patreon](https://www.patreon.com/YOUR-PAGE)
 
 Bugs and feature requests go to the [main repository](https://github.com/wunderlab-ai/wunderlab/issues), labeled by module. Security issues: see our [security policy](https://github.com/wunderlab-ai/.github/blob/main/SECURITY.md).
