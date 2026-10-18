@@ -1,0 +1,98 @@
+# Reusable CI for Wunderlab C++20 modules.
+# Call it from a module repo; see templates/ for the caller files.
+name: C++ CI
+
+on:
+  workflow_call:
+    inputs:
+      macos:
+        description: Also build on macOS (costs 10x minutes on private repos)
+        type: boolean
+        default: true
+      windows:
+        description: Also build on Windows (costs 2x minutes on private repos)
+        type: boolean
+        default: true
+      asan:
+        description: Run an AddressSanitizer + UBSan job on Linux
+        type: boolean
+        default: true
+      submodules:
+        description: Checkout submodules (false, true, or recursive)
+        type: string
+        default: "false"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cpp-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: ${{ inputs.submodules }}
+      - name: Install clang-format
+        run: sudo apt-get update && sudo apt-get install -y clang-format
+      - name: Check formatting
+        run: |
+          git ls-files -- '*.c' '*.cc' '*.cpp' '*.cu' '*.h' '*.hpp' '*.cuh' ':!:third_party/*' \
+            | xargs -r clang-format --dry-run --Werror
+
+  matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      include: ${{ steps.m.outputs.include }}
+    steps:
+      - id: m
+        env:
+          MACOS: ${{ inputs.macos }}
+          WINDOWS: ${{ inputs.windows }}
+        run: |
+          inc='[{"os":"ubuntu-latest","preset":"ci"}'
+          if [ "$MACOS" = "true" ]; then inc+=',{"os":"macos-latest","preset":"ci"}'; fi
+          if [ "$WINDOWS" = "true" ]; then inc+=',{"os":"windows-latest","preset":"vs2022"}'; fi
+          inc+=']'
+          echo "include=$inc" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: matrix
+    name: build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.include) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: ${{ inputs.submodules }}
+      - name: Install Ninja (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Install Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }}
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+      - name: Test
+        run: ctest --preset ${{ matrix.preset }}
+
+  sanitizers:
+    if: ${{ inputs.asan }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: ${{ inputs.submodules }}
+      - name: Install Ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - run: cmake --preset asan
+      - run: cmake --build --preset asan
+      - run: ctest --preset asan
